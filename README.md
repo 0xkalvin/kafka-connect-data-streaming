@@ -9,6 +9,11 @@ Start up a postgres container that will be our data source.
 docker run --rm --name postgres -p 5000:5432 -e POSTGRES_PASSWORD=postgres -d debezium/postgres
 ```
 
+Start up a postgres container that will be our data target.
+```
+docker run --rm --name postgres-target -p 5001:5432 -e POSTGRES_PASSWORD=postgres -d debezium/postgres
+```
+
 Start up a zookeeper container
 ```
 docker run -it --rm --name zookeeper -p 2181:2181 -p 2888:2888 -p 3888:3888 -d debezium/zookeeper
@@ -44,6 +49,7 @@ curl -H "Accept:application/json" http://localhost:8083/connectors/ | tac | tac
 curl -X GET -H "Accept:application/json" http://localhost:8083/connectors/users-connector | tac | tac
 ```
 
+## CDC with a Node.js consumer to insert data into the target database
 
 Now start the Node.js consumer process
 
@@ -55,3 +61,19 @@ Kafka also exposes a script to watch a topic and consume its messages
 ```
 docker run -it --name watcher --rm --link zookeeper:zookeeper --link kafka:kafka debezium/kafka watch-topic -a -k dbserver1.public.users
 ```
+
+Within the source postgres container, let's insert a bunch of data into our users table
+```SQL 
+INSERT INTO users (name) SELECT random() from generate_series(1,100000);
+```
+
+Check out the terminal running the consumer process and we should see a bunch of logs, each for an inserted user into the target database.
+
+When is done, both databases must have the same number of rows
+
+```SQL 
+SELECT COUNT(1) FROM users;
+```
+
+## CDC with a connector to the target database
+TODO
