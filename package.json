@@ -1,0 +1,24 @@
+{
+  "name": "debezium-kafka-postgres-nodejs-example",
+  "version": "1.0.0",
+  "description": "",
+  "main": "consumer.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/0xkalvin/debezium-kafka-postgres-nodejs-example.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/0xkalvin/debezium-kafka-postgres-nodejs-example/issues"
+  },
+  "homepage": "https://github.com/0xkalvin/debezium-kafka-postgres-nodejs-example#readme",
+  "dependencies": {
+    "kafkajs": "^1.15.0",
+    "pg": "^8.5.1"
+  }
+}
