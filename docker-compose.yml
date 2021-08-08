@@ -1,0 +1,171 @@
+version: '2.2'
+
+services:
+  postgressource:
+    hostname: postgressource
+    container_name: postgressource
+    build:
+      context: ./postgres/source
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_DB=postgres
+      - POSTGRES_HOST_AUTH_METHOD=trust
+    ports:
+       - 5431:5431
+    networks:
+      - datastreaming
+    command:
+      - "postgres"
+      - "-c"
+      - "shared_buffers=500MB"
+      - "-c" 
+      - "log_statement=all"
+      - "-p"
+      - "5431"
+
+  postgrestarget:
+    hostname: postgrestarget
+    container_name: postgrestarget
+    build:
+      context: ./postgres/target
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_DB=postgres
+      - POSTGRES_HOST_AUTH_METHOD=trust
+    ports:
+       - 5432:5432
+    networks:
+      - datastreaming
+    command:
+      - "postgres"
+      - "-c"
+      - "shared_buffers=500MB"
+      - "-c" 
+      - "log_statement=all"
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:6.2.0
+    hostname: zookeeper
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - datastreaming
+
+  kafka:
+    image: confluentinc/cp-kafka:6.2.0
+    hostname: kafka
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      KAFKA_DELETE_TOPIC_ENABLE: 'true'
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server 127.0.0.1:9092 --describe --topic test.public.Tweets"]
+      interval: 20s
+      retries: 5
+    networks:
+      - datastreaming
+
+  schemaregistry:
+    image: confluentinc/cp-schema-registry:6.2.0
+    hostname: schemaregistry
+    container_name: schemaregistry
+    depends_on:
+      - zookeeper
+      - kafka
+    ports:
+      - "8081:8081"
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schemaregistry
+      SCHEMA_REGISTRY_KAFKASTORE_CONNECTION_URL: 'zookeeper:2181'
+    networks:
+      - datastreaming
+
+  kafkaconnect:
+    image: confluentinc/cp-kafka-connect
+    container_name: kafkaconnect
+    hostname: kafkaconnect
+    volumes:
+      - ./connectors:/usr/share/kafka/plugins
+    ports:
+      - 8083:8083
+    links:
+      - kafka
+    environment:
+      CONNECT_BOOTSTRAP_SERVERS: "kafka:9092"
+      CONNECT_GROUP_ID: "connect"
+      CONNECT_CONFIG_STORAGE_TOPIC: "connect.cluster.configs"
+      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_OFFSET_STORAGE_TOPIC: "connect.cluster.offsets"
+      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_STATUS_STORAGE_TOPIC: "connect.cluster.status"
+      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_KEY_CONVERTER_SCHEMAS_ENABLE: "true"
+      CONNECT_KEY_CONVERTER: "io.confluent.connect.avro.AvroConverter"
+      CONNECT_KEY_CONVERTER_SCHEMA_REGISTRY_URL: "http://schemaregistry:8081"
+      CONNECT_VALUE_CONVERTER: "io.confluent.connect.avro.AvroConverter"
+      CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL: "http://schemaregistry:8081"
+      CONNECT_REST_ADVERTISED_HOST_NAME: "connect"
+      CONNECT_PLUGIN_PATH: "/usr/share/kafka/plugins"
+      AWS_ACCESS_KEY_ID: "x"
+      AWS_SECRET_ACCESS_KEY: "x"
+    restart: always
+    networks:
+      - datastreaming
+
+  nodeconsumer:
+    container_name: nodeconsumer
+    build:
+      context: ./consumers/node
+    command: npm start
+    environment:
+      - KAFKA_BROKERS=kafka:9092
+    volumes:
+      - ./consumers/node:/consumer
+      - ./consumers/node/node_modules:/consumer/node_modules
+    networks:
+      - datastreaming  
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.14.0
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - ES_JAVA_OPTS=-Xmx256m -Xms256m
+      - ELASTIC_PASSWORD=changeme
+    ports:
+      - 9200:9200
+      - 9300:9300
+    networks:
+      - datastreaming
+
+  dynamodb:
+    command: "-jar DynamoDBLocal.jar -inMemory -sharedDb"
+    image: "amazon/dynamodb-local:latest"
+    container_name: dynamodb
+    ports:
+      - "8000:8000"
+    volumes:
+      - "/home/dynamodblocal/data"
+    working_dir: /home/dynamodblocal
+    networks:
+      - datastreaming
+
+networks:
+  datastreaming:
+    driver: bridge

@@ -1,0 +1,15 @@
+{
+  "name": "consumer",
+  "version": "1.0.0",
+  "description": "A Node.JS kafka consumer",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "kafkajs": "^1.15.0"
+  }
+}
