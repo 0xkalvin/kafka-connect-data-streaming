@@ -1,4 +1,4 @@
-FROM debezium/postgres:12-alpine
+FROM postgres:12-alpine
 
 ENV POSTGRES_USER postgres
 ENV POSTGRES_DB postgres

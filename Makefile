@@ -1,5 +1,19 @@
-all: postgres zookeeper kafka schemaregistry kafkaconnect
+all: postgres zookeeper kafka schemaregistry kafkaconnect dynamodb elasticsearch
 .PHONY: all
+
+default: all
+
+down:
+	@docker-compose down -v --rmi local
+.PHONY: down
+
+dynamodb:
+	@docker-compose up -d dynamodb
+.PHONY: dynamodb
+
+elasticsearch:
+	@docker-compose up -d elasticsearch
+.PHONY: elasticsearch
 
 kafka:
 	@docker-compose up -d kafka
@@ -9,11 +23,9 @@ kafkaconnect:
 	@docker-compose up -d kafkaconnect
 .PHONY: kafkaconnect
 
-default: all
-
-down:
-	@docker-compose down -v --rmi local
-.PHONY: down
+nodeconsumer:
+	@docker-compose up nodeconsumer
+.PHONY: nodeconsumer
 
 postgres:
 	@docker-compose up -d postgressource postgrestarget

@@ -122,7 +122,47 @@ services:
       CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL: "http://schemaregistry:8081"
       CONNECT_REST_ADVERTISED_HOST_NAME: "connect"
       CONNECT_PLUGIN_PATH: "/usr/share/kafka/plugins"
+      AWS_ACCESS_KEY_ID: "x"
+      AWS_SECRET_ACCESS_KEY: "x"
     restart: always
+    networks:
+      - datastreaming
+
+  nodeconsumer:
+    container_name: nodeconsumer
+    build:
+      context: ./consumers/node
+    command: npm start
+    environment:
+      - KAFKA_BROKERS=kafka:9092
+    volumes:
+      - ./consumers/node:/consumer
+      - ./consumers/node/node_modules:/consumer/node_modules
+    networks:
+      - datastreaming  
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.14.0
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - ES_JAVA_OPTS=-Xmx256m -Xms256m
+      - ELASTIC_PASSWORD=changeme
+    ports:
+      - 9200:9200
+      - 9300:9300
+    networks:
+      - datastreaming
+
+  dynamodb:
+    command: "-jar DynamoDBLocal.jar -inMemory -sharedDb"
+    image: "amazon/dynamodb-local:latest"
+    container_name: dynamodb
+    ports:
+      - "8000:8000"
+    volumes:
+      - "/home/dynamodblocal/data"
+    working_dir: /home/dynamodblocal
     networks:
       - datastreaming
 
