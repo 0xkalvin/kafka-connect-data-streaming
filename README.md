@@ -1,79 +1,76 @@
-# debezium-kafka-postgres-nodejs-example
+# Kafka connect data streaming
 
-A simple example of how to setup a CDC process using Debezium, Kafka, Postgres and consuming the events using a Node.JS consumer.
+A data hub/streaming example solution that uses Kafka Connect to distribute data across many targets, such as Postgres, Elasticsearch, Consumers, and DynamoDB.
+
+## Scenario
+
+- A Postgres database for storing tweets as our data source.
+- Each time a new tweet is inserted in this postgres instance, we must enqueue the new record in a kafka topic.
+- From the kafka topic, each new recorded can be consumed by many actors for different use cases. In this example, our topic will be consumed by a consumer application, a JDBC postgres sink connector that replicates data to another postgres instance, a dynamoDB sink connector, and also an elasticsearch sink connector.
 
 ## Setup
 
-Start up a postgres container that will be our data source.
+### Requirements
+
+- Docker
+- Docker compose
+- Unix-like OS 
+
+### Running locally
+
+To start up the environment, just run
+```sh
+make
 ```
-docker run --rm --name postgres -p 5000:5432 -e POSTGRES_PASSWORD=postgres -d debezium/postgres
+When everything is up and running, you should see:
+- One Kafka broker with a zookeeper container as our messaging queue.
+- One Kafka connect container to pipe data between data sources and targets.
+- Two Postgres containers: one as our data source and other as a data target for our tweets.
+- One Elasticsearch container as another replication target.
+- One DynamoDB container also as a target.
+- Lastly but not least, one consumer app written in Node.js which just console logs each new tweet.
+
+Then we can start creating each connector for our data hub.
+
+Postgres source connector:
+```sh
+. ./scripts/debezium_postgres_source_connector.sh
 ```
 
-Start up a postgres container that will be our data target.
-```
-docker run --rm --name postgres-target -p 5001:5432 -e POSTGRES_PASSWORD=postgres -d debezium/postgres
-```
-
-Start up a zookeeper container
-```
-docker run -it --rm --name zookeeper -p 2181:2181 -p 2888:2888 -p 3888:3888 -d debezium/zookeeper
+Postgres sink (target) connector:
+```sh
+. ./scripts/jdbc_postgres_sink_connector.sh
 ```
 
-Start up a kafka container 
-```
-docker run -it --rm --name kafka -p 9092:9092 -d --link zookeeper:zookeeper debezium/kafka
-```
-
-Start up a kafka connect container 
-```
-docker run -it --rm --name connect -p 8083:8083 -e GROUP_ID=1 -e CONFIG_STORAGE_TOPIC=my-connect-configs -e OFFSET_STORAGE_TOPIC=my-connect-offsets -e ADVERTISED_HOST_NAME=$(echo $DOCKER_HOST | cut -f3 -d'/' | cut -f1 -d':') --link zookeeper:zookeeper --link postgres:postgres --link kafka:kafka -d debezium/connect
+Dynamodb sink (target) connector:
+```sh
+. ./scripts/dynamodb_sink_connector.sh
 ```
 
-Connect to the postgres container and create an user table
-
-```
-psql -h localhost -p 5000 -d postgres -U postgres
-
-create table users (id serial primary key, name varchar(255));
+Elasticsearch sink (target) connector:
+```sh
+. ./scripts/elasticsearch_sink_connector.sh
 ```
 
-Create a connector bewteen the source postgres and the kafka container
-```
-curl -i -X POST -H "Accept:application/json" -H  "Content-Type:application/json" http://localhost:8083/connectors/ -d @register-source-postgres.json
-```
+Populate the data source with dummy data to test our data replication pipelines:
 
-Check if it was successfully created
-```
-curl -H "Accept:application/json" http://localhost:8083/connectors/ | tac | tac
-
-curl -X GET -H "Accept:application/json" http://localhost:8083/connectors/users-connector | tac | tac
+```sh
+ docker-compose exec postgressource psql -h localhost -p 5431 -U postgres -d postgres -c "INSERT INTO \"Tweets\" (id, account_id, content, created_at, updated_at) SELECT random(), random(),random(), now(), now() from generate_series(1,1000)"
 ```
 
-## CDC with a Node.js consumer to insert data into the target database
+Then check each data target and see if tweets being replicated:
 
-Now start the Node.js consumer process
-
-```
-node consumer.js
-```
-
-Kafka also exposes a script to watch a topic and consume its messages
-```
-docker run -it --name watcher --rm --link zookeeper:zookeeper --link kafka:kafka debezium/kafka watch-topic -a -k dbserver1.public.users
+Postgres target
+```sh
+ docker-compose exec postgrestarget psql -h localhost -p 5431 -U postgres -d postgres -c "SELECT * FROM \"Tweets\""
 ```
 
-Within the source postgres container, let's insert a bunch of data into our users table
-```SQL 
-INSERT INTO users (name) SELECT random() from generate_series(1,100000);
+Dynamodb
+```sh
+aws dynamodb scan --table-name test.public.Tweets --endpoint http://localhost:8000 --region us-east-1
 ```
 
-Check out the terminal running the consumer process and we should see a bunch of logs, each for an inserted user into the target database.
-
-When is done, both databases must have the same number of rows
-
-```SQL 
-SELECT COUNT(1) FROM users;
+Elasticsearch
+```sh
+curl http://localhost:9200/test.public.tweets/_search?pretty
 ```
-
-## CDC with a connector to the target database
-TODO
